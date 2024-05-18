@@ -1,0 +1,25 @@
+all:
+  vars:
+    DB_USER: "dbuser"
+    DB_PASSWORD: "12345"
+    DB_REPL_USER: "repl_user"
+    DB_REPL_PASSWORD: "12345"
+    DB_PORT: "5432"
+    DB_DATABASE: "data"
+    DB_REPL_PORT: "5433"
+  hosts:
+    tg-bot:
+      ansible_host: 192.168.94.166
+      ansible_user: ansible
+      ansible_password: ansible
+      ansible_become_password: ansible
+    db:
+      ansible_host: 192.168.94.166
+      ansible_user: ansible
+      ansible_password: ansible
+      ansible_become_password: ansible
+    db_repl:
+      ansible_host: 192.168.94.167
+      ansible_user: ansible
+      ansible_password: ansible
+      ansible_become_password: ansible
