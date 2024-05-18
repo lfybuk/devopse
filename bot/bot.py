@@ -291,15 +291,19 @@ def text_message(update, context):
         update.message.reply_text('Неверная команда. Используйте /find_email, /find_phone_number, /verify_password, /get_release, /get_uname, /get_uptime, /get_df, /get_free, /get_mpstat, /get_w, /get_auths, /get_critical, /get_ps, /get_ss, /get_apt_list, /get_services или /get_repl_log /get_phone_numbers, /get_emails') 
 
  
-def find_emails(text):
-    pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
-    emails = set(re.findall(pattern, text))
-    return list(emails)
+# поиск email-адресов в тексте 
+def find_emails(text): 
+    pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b' 
+    emails = re.findall(pattern, text)
+    unique_emails = list(set(emails))
+    return unique_emails
 
-def find_phone_numbers(text):
-    pattern = r'((?:\+7|8)[-\s]?[(]?\d{3}[)]?[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2})'
-    phone_numbers = set(re.findall(pattern, text))
-    return list(phone_numbers)
+# поиск номеров телефона в тексте 
+def find_phone_numbers(text): 
+    pattern = r'((?:\+7|8)[-\s]?[(]?\d{3}[)]?[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2})' 
+    phone_numbers = re.findall(pattern, text) 
+    unique_phone_numbers = list(set(phone_numbers))
+    return unique_phone_numbers
 
 # проверка сложности пароля
 def check_password_complexity(password):
