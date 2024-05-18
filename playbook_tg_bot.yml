@@ -1,0 +1,232 @@
+- name: Install and configure PostgreSQL master
+  hosts: db
+  become: yes
+  become_method: sudo
+  vars_files:
+  - inventory.yml
+  tasks:
+  # для использования дебиана расскоментируйте блок "#"
+  #  - name: Add PostgreSQL apt repository
+  #    apt_key:
+  #      url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  #      state: present
+
+  #  - name: Add PostgreSQL repository
+  #    apt_repository:
+  #      repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+  #      state: present
+        
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install PostgreSQL
+      apt:
+        name:
+          - postgresql-14
+          - postgresql-client-14
+          - postgresql-contrib-14
+        state: present
+
+    - name: Start PostgreSQL service
+      systemd:
+        name: postgresql
+        enabled: yes
+        state: started
+    - service:
+        name: postgresql
+        state: started
+
+    - name: Create tables
+      become_user: postgres
+      postgresql_db:
+        name: "{{ DB_DATABASE }}"
+        state: present
+
+    - name: Create database user
+      become_user: postgres
+      postgresql_user:
+        name: "{{ DB_USER }}"
+        password: "{{ DB_PASSWORD }}"
+        db: "{{ DB_DATABASE }}"
+        priv: "ALL"
+        role_attr_flags: SUPERUSER
+        state: present
+
+    - name: Create replication user
+      become_user: postgres
+      postgresql_user:
+        name: "{{ DB_REPL_USER }}"
+        password: "{{ DB_REPL_PASSWORD }}"
+        role_attr_flags: SUPERUSER,REPLICATION
+
+    - name: Create phone table
+      become_user: postgres
+      postgresql_query:
+        db: "{{ DB_DATABASE }}"
+        query: |
+          CREATE TABLE IF NOT EXISTS phone_numbers (
+              id SERIAL PRIMARY KEY,
+              phone_number VARCHAR(20)
+          );
+          INSERT INTO phone_numbers (phone_number) VALUES ('81234567890');
+
+    - name: Create email table
+      become_user: postgres
+      postgresql_query:
+        db: "{{ DB_DATABASE }}"
+        query: |
+          CREATE TABLE IF NOT EXISTS emails (
+              id SERIAL PRIMARY KEY,
+              email VARCHAR(100)
+          );
+          INSERT INTO emails (email) VALUES ('test1@example.com');
+
+    - name: Copy PostgreSQL configuration files with jinja2
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: "pg_hba.conf.j2", dest: "/etc/postgresql/14/main/pg_hba.conf" }
+        - { src: "config-postgresql.j2", dest: "/etc/postgresql/14/main/postgresql.conf" }
+    
+    - name: Create archive directory
+      become: yes
+      file:
+        path: /oracle/pg_data/archive
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+
+    - name: Restart PostgreSQL service
+      systemd:
+        name: postgresql
+        state: restarted
+
+    - name: Change permissions on PostgreSQL log files
+      become: yes
+      file:
+        path: /var/log/postgresql
+        owner: postgres
+        group: postgres
+        mode: '0755'
+        recurse: yes
+     
+- name: Install PostgreSQL slave
+  hosts: db_repl
+  become: yes
+  tasks:
+  # если ситема на дебиане, расскоментируйте строки "#"
+  #  - name: Add PostgreSQL apt repository
+  #    apt_key:
+  #      url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  #      state: present
+
+  # - name: Add PostgreSQL repository
+  #    apt_repository:
+  #      repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+  #      state: present
+  
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install PostgreSQL
+      apt:
+        name:
+          - postgresql-14
+          - postgresql-client-14
+          - postgresql-contrib-14
+        state: present
+
+- name: Configure replication on slave
+  hosts: db_repl
+  become: yes
+  tasks:
+    - name: Stop PostgreSQL service on db_repl
+      systemd:
+        name: postgresql
+        state: stopped
+
+    - name: Clean up data directory on db_repl
+      become_user: postgres
+      shell: rm -rf /var/lib/postgresql/14/main/*
+
+    - name: Create archive directory
+      become: yes
+      file:
+        path: /oracle/pg_data/archive
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+
+
+    - name: Run pg_basebackup on db_repl
+      become_user: postgres
+      shell: |
+        PGPASSWORD={{ DB_REPL_PASSWORD }} pg_basebackup -R -h {{ hostvars['db']['ansible_host'] }} -U {{ DB_REPL_USER }} -p {{ DB_PORT }} -D /var/lib/postgresql/14/main/
+
+    - name: Start PostgreSQL service on db_repl
+      systemd:
+        name: postgresql
+        state: started
+
+- name: Deploy and run Telegram bot
+  hosts: tg-bot
+  become: yes
+  become_method: sudo
+  vars:
+    repo_url: "https://github.com/lfybuk/ansible_bot.git"
+    bot_dest: "/home/{{ ansible_user }}/tg-bot"
+    requirements_file: "{{ bot_dest }}/requirements.txt"
+    branch: "main"
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - git
+          - python3
+          - python3-pip
+          - libpq-dev
+          - python3-virtualenv  
+        state: present
+
+    - name: Clone Telegram bot repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ bot_dest }}"
+        version: "{{ branch }}"
+      
+    - name: Install Python modules
+      become: yes
+      pip:
+        virtualenv: /opt/tg-bot/venv
+        requirements: "/home/{{ ansible_user }}/tg-bot/requirements.txt"
+        
+# если ситема дебиан раскомментируйте строки и закомментируйте предыдущий таск
+#    - name: Install Python requirements with --break-system-packages
+#      command: /usr/bin/python3 -m pip install --break-system-packages -r {{ requirements_file }}
+#      args:
+#        chdir: "{{ bot_dest }}"
+
+            
+    - name: Copy .env file to bot directory
+      copy:
+        src: .env
+        dest: "{{ bot_dest }}/.env"
+
+    - name: Ensure the bot directory is writable
+      file:
+        path: "{{ bot_dest }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+
+    - name: Start bot
+      become: yes
+      command: /opt/tg-bot/venv/bin/python3 /home/{{ ansible_user }}/tg-bot/bot.py
