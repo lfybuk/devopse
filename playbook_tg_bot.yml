@@ -15,11 +15,28 @@
   #    apt_repository:
   #      repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
   #      state: present
-        
+
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - python3-venv
+          - python3-pip
+          - git
+          - libpq-dev
+          - python3-virtualenv
+        state: present
+
+    - name: Install psycopg2
+      become: yes
+      pip:
+        name: psycopg2
+        state: present
 
     - name: Install PostgreSQL
       apt:
@@ -90,7 +107,7 @@
       with_items:
         - { src: "pg_hba.conf.j2", dest: "/etc/postgresql/14/main/pg_hba.conf" }
         - { src: "config-postgresql.j2", dest: "/etc/postgresql/14/main/postgresql.conf" }
-    
+
     - name: Create archive directory
       become: yes
       file:
@@ -113,7 +130,7 @@
         group: postgres
         mode: '0755'
         recurse: yes
-     
+
 - name: Install PostgreSQL slave
   hosts: db_repl
   become: yes
@@ -128,7 +145,7 @@
   #    apt_repository:
   #      repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
   #      state: present
-  
+
     - name: Update apt cache
       apt:
         update_cache: yes
@@ -192,7 +209,7 @@
           - python3
           - python3-pip
           - libpq-dev
-          - python3-virtualenv  
+          - python3-virtualenv
         state: present
 
     - name: Clone Telegram bot repository
@@ -200,20 +217,20 @@
         repo: "{{ repo_url }}"
         dest: "{{ bot_dest }}"
         version: "{{ branch }}"
-      
+
     - name: Install Python modules
       become: yes
       pip:
         virtualenv: /opt/tg-bot/venv
         requirements: "/home/{{ ansible_user }}/tg-bot/requirements.txt"
-        
+
 # если ситема дебиан раскомментируйте строки и закомментируйте предыдущий таск
 #    - name: Install Python requirements with --break-system-packages
 #      command: /usr/bin/python3 -m pip install --break-system-packages -r {{ requirements_file }}
 #      args:
 #        chdir: "{{ bot_dest }}"
 
-            
+
     - name: Copy .env file to bot directory
       copy:
         src: .env
