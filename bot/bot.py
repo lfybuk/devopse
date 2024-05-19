@@ -24,7 +24,7 @@ user_states = {}
 
 # получаем ssh креды из .env
 RM_HOST = os.getenv("RM_HOST")
-RM_PORT = int(os.getenv("RM_PORT"))
+RM_PORT = os.getenv("RM_PORT")
 RM_USER = os.getenv("RM_USER")
 RM_PASSWORD = os.getenv("RM_PASSWORD")
 
